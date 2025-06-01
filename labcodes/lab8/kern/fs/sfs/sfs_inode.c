@@ -349,6 +349,7 @@ sfs_bmap_free_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, uint32_t index) 
  * @sin:      sfs inode in memory
  * @index:    the logical index of disk block in inode
  * @ino_store:the NO. of disk block
+ * 如果 index 等于文件当前的块数 (din->blocks)，则意味着要为文件追加一个新的块，此时 create 为 true
  */
 static int
 sfs_bmap_load_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, uint32_t index, uint32_t *ino_store) {
@@ -599,6 +600,39 @@ sfs_io_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, void *buf, off_t offset
      * (3) If end position isn't aligned with the last block, Rd/Wr some content from begin to the (endpos % SFS_BLKSIZE) of the last block
 	 *       NOTICE: useful function: sfs_bmap_load_nolock, sfs_buf_op	
 	*/
+    if (offset % SFS_BLKSIZE) { // (1)
+        blkoff = offset % SFS_BLKSIZE;
+        size = (nblks != 0) ? (SFS_BLKSIZE - blkoff) : (endpos - offset);
+        if ((ret = sfs_bmap_load_nolock(sfs, sin, blkno, &ino)) != 0)
+            goto out;
+        if ((ret = sfs_buf_op(sfs, buf, size, ino, blkoff)) != 0)
+            goto out;
+        alen += size;
+        buf += size;
+        offset += size;
+        blkno ++;
+        if (nblks == 0)
+            goto out;
+        else
+            nblks --;
+    }
+    if (nblks > 0) { // (2)
+        if ((ret = sfs_bmap_load_nolock(sfs, sin, blkno, &ino)) != 0)
+            goto out;
+        if ((ret = sfs_block_op(sfs, buf, ino, nblks)) != 0)
+            goto out;
+        buf += nblks * SFS_BLKSIZE;
+        alen += nblks * SFS_BLKSIZE;
+        blkno += nblks;
+    }
+    if (endpos % SFS_BLKSIZE) { // (3)
+        size = endpos % SFS_BLKSIZE;
+        if ((ret = sfs_bmap_load_nolock(sfs, sin, blkno, &ino)) != 0)
+            goto out;
+        if ((ret = sfs_buf_op(sfs, buf, size, ino, 0)) != 0)
+            goto out;
+        alen += size;
+    }
 out:
     *alenp = alen;
     if (offset + alen > sin->din->size) {
