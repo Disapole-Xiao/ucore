@@ -492,7 +492,7 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     if (setup_kstack(proc) != 0) {
         goto bad_fork_cleanup_proc;
     }
-    if (copy_files(clone_flags, proc) != 0) { // // LAB8 将当前进程的fs复制到fork出的进程中
+    if (copy_files(clone_flags, proc) != 0) { // LAB8 将当前进程的fs复制到fork出的进程中
         goto bad_fork_cleanup_kstack;
     }    
     if (copy_mm(clone_flags, proc) != 0) {
@@ -631,38 +631,40 @@ load_icode(int fd, int argc, char **kargv) {
     }
 
     int ret = -E_NO_MEM;
-    // 创建proc的内存管理结构
     struct mm_struct *mm;
+    //(1) create a new mm for current process
     if ((mm = mm_create()) == NULL) {
         goto bad_mm;
     }
+    //(2) create a new PDT, and mm->pgdir= kernel virtual addr of PDT
     if (setup_pgdir(mm) != 0) {
         goto bad_pgdir_cleanup_mm;
     }
-
+    //(3) copy TEXT/DATA section, build BSS parts in binary to memory space of process
     struct Page *page;
-    // LAB8 这里要从文件中读取ELF header，而不是Lab7中的内存了
+    // (3.1) read raw data content in file and resolve elfhdr
     struct elfhdr __elf, *elf = &__elf;
     if ((ret = load_icode_read(fd, elf, sizeof(struct elfhdr), 0)) != 0) {
         goto bad_elf_cleanup_pgdir;
     }
-    // 判断读取入的elf header是否正确
     if (elf->e_magic != ELF_MAGIC) {
         ret = -E_INVAL_ELF;
         goto bad_elf_cleanup_pgdir;
     }
-    // 根据每一段的大小和基地址来分配不同的内存空间
+    // (3.2) read raw data content in file and resolve proghdr based on info in elfhdr
     struct proghdr __ph, *ph = &__ph;
     uint32_t vm_flags, perm, phnum;
-    for (phnum = 0; phnum < elf->e_phnum; phnum ++) {
-        // LAB8 从文件特定偏移处读取每个段的详细信息（包括大小、基地址等等）
-        off_t phoff = elf->e_phoff + sizeof(struct proghdr) * phnum;
+    for (phnum = 0; phnum < elf->e_phnum; phnum ++) { // 遍历每个程序段头
+        off_t phoff = elf->e_phoff + sizeof(struct proghdr) * phnum; // 计算当前要读取的程序段头在文件中的偏移量
         if ((ret = load_icode_read(fd, ph, sizeof(struct proghdr), phoff)) != 0) {
             goto bad_cleanup_mmap;
         }
-        if (ph->p_type != ELF_PT_LOAD) {
+        if (ph->p_type != ELF_PT_LOAD) { // 我们只关心类型为 PT_LOAD 的程序段头，因为它们是需要加载到内存中的段
             continue ;
         }
+        // p_filesz 是该段在文件中的大小
+        // p_memsz 是该段加载到内存后应占用的大小
+        // 通常 p_memsz >= p_filesz (例如 BSS 段在文件中大小为0，但在内存中需要分配空间并清零)
         if (ph->p_filesz > ph->p_memsz) {
             ret = -E_INVAL_ELF;
             goto bad_cleanup_mmap;
@@ -670,13 +672,14 @@ load_icode(int fd, int argc, char **kargv) {
         if (ph->p_filesz == 0) {
             continue ;
         }
+        //(3.3) call mm_map to build vma related to TEXT/DATA
+        // 根据 ELF 文件中的信息，对各个段的权限进行设置
         vm_flags = 0, perm = PTE_U;
         if (ph->p_flags & ELF_PF_X) vm_flags |= VM_EXEC;
         if (ph->p_flags & ELF_PF_W) vm_flags |= VM_WRITE;
         if (ph->p_flags & ELF_PF_R) vm_flags |= VM_READ;
         if (vm_flags & VM_WRITE) perm |= PTE_W;
-        // 为当前段分配内存空间
-        if ((ret = mm_map(mm, ph->p_va, ph->p_memsz, vm_flags, NULL)) != 0) {
+        if ((ret = mm_map(mm, ph->p_va, ph->p_memsz, vm_flags, NULL)) != 0) { // 将这些段的虚拟内存地址设置为合法的
             goto bad_cleanup_mmap;
         }
         off_t offset = ph->p_offset;
@@ -685,11 +688,12 @@ load_icode(int fd, int argc, char **kargv) {
 
         ret = -E_NO_MEM;
 
+     //(3.6) alloc memory, and  copy the contents of every program section (from, from+end) to process's memory (la, la+end)
         end = ph->p_va + ph->p_filesz;
+     //(3.4) callpgdir_alloc_page to allocate page for TEXT/DATA, read contents in file and copy them into the new allocated pages
         while (start < end) {
             // 设置该内存所对应的页表项
             if ((page = pgdir_alloc_page(mm->pgdir, la, perm)) == NULL) {
-                ret = -E_NO_MEM;
                 goto bad_cleanup_mmap;
             }
             off = start - la, size = PGSIZE - off, la += PGSIZE;
@@ -702,9 +706,9 @@ load_icode(int fd, int argc, char **kargv) {
             }
             start += size, offset += size;
         }
+        //(3.5) callpgdir_alloc_page to allocate pages for BSS, memset zero in these pages        
         end = ph->p_va + ph->p_memsz;
-        // 对于段中当前页中剩余的空间（复制elf数据后剩下的空间），将其置为0
-        if (start < la) {
+        if (start < la) {// 如果存在 BSS 段，并且先前的 TEXT/DATA 段分配的最后一页没有被完全占用，则剩余的部分被BSS段占用，因此进行清零初始化
             /* ph->p_memsz == ph->p_filesz */
             if (start == end) {
                 continue ;
@@ -717,8 +721,7 @@ load_icode(int fd, int argc, char **kargv) {
             start += size;
             assert((end < la && start == end) || (end >= la && start == la));
         }
-        // 对于段中剩余页中的空间（复制elf数据后的多余页面），将其置为0
-        while (start < end) {
+        while (start < end) { // 如果存在 BSS 段，并且先前的 TEXT/DATA 段分配的最后一页没有被完全占用，则剩余的部分被BSS段占用，因此进行清零初始化
             if ((page = pgdir_alloc_page(mm->pgdir, la, perm)) == NULL) {
                 ret = -E_NO_MEM;
                 goto bad_cleanup_mmap;
@@ -734,7 +737,7 @@ load_icode(int fd, int argc, char **kargv) {
     // 关闭读取的ELF
     sysfile_close(fd);
 
-    // 设置栈内存
+    //(4) build user stack memory
     vm_flags = VM_READ | VM_WRITE | VM_STACK;
     if ((ret = mm_map(mm, USTACKTOP - USTACKSIZE, USTACKSIZE, vm_flags, NULL)) != 0) {
         goto bad_cleanup_mmap;
@@ -744,32 +747,34 @@ load_icode(int fd, int argc, char **kargv) {
     assert(pgdir_alloc_page(mm->pgdir, USTACKTOP-3*PGSIZE , PTE_USER) != NULL);
     assert(pgdir_alloc_page(mm->pgdir, USTACKTOP-4*PGSIZE , PTE_USER) != NULL);
 
+    //(5) set current process's mm, sr3, and set CR3 reg = physical addr of Page Directory
     mm_count_inc(mm);
-    // 设置CR3页表相关寄存器
     current->mm = mm;
     current->cr3 = PADDR(mm->pgdir);
     lcr3(PADDR(mm->pgdir));
 
-    //setup argc, argv
-    // LAB8 设置execve所启动的程序参数
+    //(6) setup uargc and uargv in user stacks
     uint32_t argv_size=0, i;
-    for (i = 0; i < argc; i ++) {
+    for (i = 0; i < argc; i ++) { // 计算参数字符串总长度
         argv_size += strnlen(kargv[i],EXEC_MAX_ARG_LEN + 1)+1;
     }
-
-    uintptr_t stacktop = USTACKTOP - (argv_size/sizeof(long)+1)*sizeof(long);
+    
+    uintptr_t stacktop = USTACKTOP - (argv_size/sizeof(long)+1)*sizeof(long); // 参数字符串放置的起始位置（与long对齐）
     // 直接将传入的参数压入至新栈的底部
-    char** uargv=(char **)(stacktop  - argc * sizeof(char *));
-
+    char** uargv=(char **)(stacktop  - argc * sizeof(char *)); // 指向参数字符串的指针的起始位置
+    
+    // 将参数字符串从内核空间 (kargv[i]) 拷贝到用户栈的字符串区域 (从 stacktop 开始)
+    // 同时，填充用户空间的 uargv 数组，使其指向用户栈中对应的字符串
     argv_size = 0;
     for (i = 0; i < argc; i ++) {
         uargv[i] = strcpy((char *)(stacktop + argv_size ), kargv[i]);
         argv_size +=  strnlen(kargv[i],EXEC_MAX_ARG_LEN + 1)+1;
     }
-
+    
     stacktop = (uintptr_t)uargv - sizeof(int);
     *(int *)stacktop = argc;
-
+    
+    //(7) setup trapframe for user environment
     struct trapframe *tf = current->tf;
     memset(tf, 0, sizeof(struct trapframe));
     tf->tf_cs = USER_CS;

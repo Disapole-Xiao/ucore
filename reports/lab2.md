@@ -219,12 +219,6 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
 
 页表项指向一个物理页的物理地址，页目录项指向一个页表的物理地址，而一个页表本身也占据一个页，因此页表项和页目录项指向的地址可以对应到 `page`。但 `page` 反过来不一定唯一对应到页目录项和页表项，可能对应多个虚拟页。
 
-运行 `make grade` 得到满分：
-
-![alt text](images/lab2_grade.png)
-
-![alt text](images/lab2_out.png)
-
 > 如果希望虚拟地址与物理地址相等，则需要如何修改 lab2，完成此事？ **鼓励通过编程来具体完成这个问题**
 
 **原本 lab2 中 ucore 地址映射的变化过程如下：**
@@ -292,3 +286,11 @@ PDE(001) fac00000-fb000000 00400000 -rw
 ++ setup timer interrupts
 100 ticks
 ```
+
+## 实验结果
+
+运行 `make grade` 得到满分：
+
+![alt text](images/lab2_grade.png)
+
+![alt text](images/lab2_out.png)

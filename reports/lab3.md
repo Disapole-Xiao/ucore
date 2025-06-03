@@ -171,12 +171,6 @@ _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick
 }
 ```
 
-输入 `make grade` 达到满分：
-
-![alt text](images/lab3_grade.png)
-
-![alt text](images/lab3_out.png)
-
 > 如果要在 ucore 上实现 "extended clock 页替换算法" 请给你的设计方案，现有的 `swap_manager` 框架是否足以支持在 ucore 中实现此算法？如果是，请给你的设计方案。如果不是，请给出你的新的扩展和基此扩展的设计方案。并需要回答如下问题：
     - 需要被换出的页的特征是什么？
     - 在 ucore 中如何判断具有这样特征的页？
@@ -192,3 +186,11 @@ extended clock 算法除了考虑页面的访问情况，还需考虑页面的�
 **在 ucore 中如何判断具有这样特征的页**：ucore 的页表项中已经存在标志位 `PTE_A` 和 `PTE_D` 表示访问和修改。当该页被访问时，CPU 中的 MMU 硬件将把访问位置 `1`。当该页被“写”时，CPU 中的 MMU 硬件将把修改位置 `1`，这样就可以判断了。
 
 **何时进行换入和换出操作**：与 FIFO 相同，缺页时进行换入操作，没有可分配的物理帧时进行换出操作。
+
+## 实验结果
+
+输入 `make grade` 达到满分：
+
+![alt text](images/lab3_grade.png)
+
+![alt text](images/lab3_out.png)

@@ -263,11 +263,6 @@ ucore 实现了信号量的以下基本操作：
     }
     ```
 
-输入 `make grade` 得到满分
-
-![alt text](images/lab7_grade.png)
-
-![alt text](images/lab7_out.png)
 
 
 > 请在实验报告中给出内核级条件变量的设计描述，并说其大致执行流流程。
@@ -372,3 +367,10 @@ monitor_init (monitor_t * mtp, size_t num_cv) {
 - 相同点：对条件变量的操作基本相同
 - 不同点：内核级在内核态运行，而用户态涉及用户态到内核态的切换。内核态可以直接调用管程的锁和变量，而用户态需要依赖用户传入。
 
+## 实验结果
+
+输入 `make grade` 得到满分
+
+![alt text](images/lab7_grade.png)
+
+![alt text](images/lab7_out.png)
