@@ -1,8 +1,8 @@
-# 操作系统lab5
+# LAB5 用户进程管理
 
-# 原先代码改进
+## 原先代码改进
 
-我们首先需要改进do_fork函数：
+我们首先需要改进 `do_fork` 函数：
 
 ```c
 //LAB5 YOUR CODE : (更新LAB4步骤)
@@ -14,13 +14,13 @@
 */
 ```
 
-步骤1增加代码：`assert(current->wait_state == 0);` 
+步骤 1 增加代码：`assert(current->wait_state == 0);`
 
-步骤5改为`set_links(proc);`
+步骤 5 改为 `set_links(proc);`
 
-将原来简单的计数改成来执行set_links函数，从而实现设置进程的相关链接
+将原来简单的计数改成来执行 `set_links` 函数，从而实现设置进程的相关链接。
 
-do_fork整体代码变为：
+`do_fork` 整体代码变为：
 
 ```c
 /* do_fork -     parent process for a new child process
@@ -74,7 +74,7 @@ bad_fork_cleanup_proc:
 }
 ```
 
-同时我们需要改进`alloc_proc`函数
+同时我们需要改进 `alloc_proc` 函数：
 
 ```c
 // LAB5 你的代码：在 LAB4 的基础上进行更新
@@ -110,7 +110,7 @@ static struct proc_struct *alloc_proc(void) {
 }
 ```
 
-改进idt_init函数
+改进 `idt_init` 函数：
 
 ```c
 /* LAB5 你的代码 */
@@ -119,7 +119,7 @@ static struct proc_struct *alloc_proc(void) {
 // 因此你需要在这里设置系统调用的中断门（syscall interrupt gate）。
 ```
 
-这是调用宏 SETGATE(...) 往中断描述符表（IDT）中设置第 T_SYSCALL 项，也就是系统调用中断。设置 IDT 的系统调用中断入口，使得用户程序可以用 int T_SYSCALL 执行系统调用，进入内核提供的服务。
+这是调用宏 `SETGATE(...)` 往中断描述符表（IDT）中设置第 `T_SYSCALL` 项，也就是系统调用中断。设置 IDT 的系统调用中断入口，使得用户程序可以用 `int T_SYSCALL` 执行系统调用，进入内核提供的服务。
 
 ```c
 void idt_init(void) {
@@ -133,7 +133,7 @@ void idt_init(void) {
 }
 ```
 
-改进trap_dispatch函数
+改进 `trap_dispatch` 函数：
 
 ```c
 /* LAB5 你的代码 */
@@ -142,7 +142,7 @@ void idt_init(void) {
  */
 ```
 
-改进后的代码，增加了一行`current->need_resched = 1`
+改进后的代码，增加了一行 `current->need_resched = 1`：
 
 ```c
 ticks ++;
@@ -152,9 +152,9 @@ if (ticks % TICK_NUM == 0) {
 }
 ```
 
-# 练习1: 加载应用程序并执行
+## 练习 1：加载应用程序并执行
 
-查看`do_execve`函数，发现`do_execv`函数调用load_icode（位于kern/process/proc.c中）来加载并解析一个处于内存中的ELF执行文件格式的应用程序，建立相应的用户内存空间来放置应用程序的代码段、数据段等。
+查看 `do_execve` 函数，发现 `do_execv` 函数调用 `load_icode`（位于 `kern/process/proc.c` 中）来加载并解析一个处于内存中的 ELF 执行文件格式的应用程序，建立相应的用户内存空间来放置应用程序的代码段、数据段等。
 
 ```c
 // do_execve - call exit_mmap(mm)&put_pgdir(mm) to reclaim memory space of current process
@@ -206,16 +206,15 @@ execve_exit:
     do_exit(ret);
     panic("already exit: %e.\n", ret); // 实际上不会执行到这里（do_exit 不会返回）
 }
-
 ```
 
-查看load_icode函数，发现其主要完成了以下功能：
+查看 `load_icode` 函数，发现其主要完成了以下功能：
 
 1. 为当前进程创建一个新的内存管理结构
-2. 创建新的页目录表，并将mm->pgdir设置为页目录表的内核虚拟地址
-3. 将二进制程序中的TEXT/DATA段复制到进程的内存空间，并构建BSS段
+2. 创建新的页目录表，并将 `mm->pgdir` 设置为页目录表的内核虚拟地址
+3. 将二进制程序中的 TEXT/DATA 段复制到进程的内存空间，并构建 BSS 段
 4. 建立用户栈内存
-5. 设置当前进程的mm、sr3，并将CR3寄存器设置为页目录表的物理地址
+5. 设置当前进程的 `mm`、`sr3`，并将 CR3 寄存器设置为页目录表的物理地址
 6. 为用户环境设置陷阱帧
 
 ```c
@@ -347,6 +346,11 @@ load_icode(unsigned char *binary, size_t size) {
      *       tf_eip应该是该二进制程序的入口点(elf->e_entry)
      *       tf_eflags应该设置为允许计算机产生中断
      */
+    tf->tf_cs = USER_CS;
+    tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+    tf->tf_esp = USTACKTOP; 
+    tf->tf_eip = elf->e_entry;
+    tf->tf_eflags = FL_IF;
     ret = 0;
 out:
     return ret;
@@ -361,11 +365,11 @@ bad_mm:
 }
 ```
 
-## 设计实现过程
+### 设计实现过程
 
-本实验需要我们设置好proc_struct结构中的成员变量trapframe中的内容，确保在执行此进程后，能够从应用程序设定的起始执行地址开始执行。
+本实验需要我们设置好 `proc_struct` 结构中的成员变量 `trapframe` 中的内容，确保在执行此进程后，能够从应用程序设定的起始执行地址开始执行。
 
-查看trapframe结构体
+查看 `trapframe` 结构体：
 
 ```c
 // 代表中断/异常发生时保存的一组寄存器和状态信息
@@ -399,7 +403,6 @@ struct trapframe {
     uint16_t tf_ss;               // 被中断代码的用户态 SS（栈段选择子）
     uint16_t tf_padding5;         // 对齐填充
 } __attribute__((packed));        // 不允许编译器自动填充结构体对齐空间
-
 ```
 
 依照实验提示，我们需要按照如下方式填充：
@@ -417,13 +420,13 @@ struct trapframe {
  */
 ```
 
-在 x86 架构中，访问内存必须通过段选择子和页表配合完成，而段寄存器（ds, ss, es）决定了当前运行代码的权限和访问范围。在内核态运行时，使用的是 KERNEL_CS, KERNEL_DS 等内核段,在用户态运行时，必须切换到 USER_CS, USER_SS 等用户段。由于最终是在用户态下运行的，所以需要将段寄存器初始化为用户态的代码段、数据段、堆栈段。
+在 x86 架构中，访问内存必须通过段选择子和页表配合完成，而段寄存器（`ds`、`ss`、`es`）决定了当前运行代码的权限和访问范围。在内核态运行时，使用的是 `KERNEL_CS`、`KERNEL_DS` 等内核段，在用户态运行时，必须切换到 `USER_CS`、`USER_SS` 等用户段。由于最终是在用户态下运行的，所以需要将段寄存器初始化为用户态的代码段、数据段、堆栈段。
 
-esp 应当指向先前的步骤中创建的用户栈的栈顶，每个用户进程必须拥有自己的栈空间。栈是向下增长的，因此设置 ESP 指向栈顶。
+`esp` 应当指向先前的步骤中创建的用户栈的栈顶，每个用户进程必须拥有自己的栈空间。栈是向下增长的，因此设置 ESP 指向栈顶。
 
-eip指向下一条要执行的指令，故eip 应当指向 ELF 可执行文件加载到内存之后的入口处。
+`eip` 指向下一条要执行的指令，故 `eip` 应当指向 ELF 可执行文件加载到内存之后的入口处。
 
-eflags 中应当初始化为中断使能。
+`eflags` 中应当初始化为中断使能。
 
 故需要填充的代码如下：
 
@@ -435,13 +438,13 @@ tf->tf_eip = elf->e_entry;
 tf->tf_eflags = FL_IF;
 ```
 
-## 用户态进程被ucore选择占用CPU执行到具体执行应用程序第一条指令的整个经过
+### 用户态进程被 ucore 选择占用 CPU 执行到具体执行应用程序第一条指令的整个经过
 
-在fork/exec后，用户态进程调用了 exec 系统调用，从而转入到了系统调用的处理例程，在经过了中断处理例程之后，执行SYS_exec，并执行调用do_execve函数，然后通过load_icode函数对整个用户线程内存空间的初始化，包括设置用户页表、加载 ELF、构造 trapframe等，在完成了 do_exec 函数之后，进行正常的中断返回的流程，由于中断处理例程的栈上面的 eip 已经被修改成了应用程序的入口处，而 CS 上的 CPL 是用户态，因此 iret（恢复一系列寄存器） 进行中断返回的时候会将堆栈切换到用户的栈，并且完成特权级的切换，并且跳转到要求的应用程序的入口处，接下来开始具体执行应用程序的第一条指令。
+在 `fork/exec` 后，用户态进程调用了 `exec` 系统调用，从而转入到了系统调用的处理例程，在经过了中断处理例程之后，执行 `SYS_exec`，并执行调用 `do_execve` 函数，然后通过 `load_icode` 函数对整个用户线程内存空间的初始化，包括设置用户页表、加载 ELF、构造 `trapframe` 等，在完成了 `do_exec` 函数之后，进行正常的中断返回的流程，由于中断处理例程的栈上面的 `eip` 已经被修改成了应用程序的入口处，而 CS 上的 CPL 是用户态，因此 `iret`（恢复一系列寄存器）进行中断返回的时候会将堆栈切换到用户的栈，并且完成特权级的切换，并且跳转到要求的应用程序的入口处，接下来开始具体执行应用程序的第一条指令。
 
 图解如下：
 
-```c
+```
 fork/exec → do_execve → load_icode
          ↓
 设置用户页表、加载 ELF、构造 trapframe
@@ -453,17 +456,17 @@ trapframe 设置 eip/esp/cs/ds/ss/eflags 等
 CPU 切换为用户态 → 执行 eip 第一条指令
 ```
 
-# 练习2: 父进程复制自己的内存空间给子进程
+## 练习 2：父进程复制自己的内存空间给子进程
 
-## 设计实现过程
+### 设计实现过程
 
-创建子进程的函数do_fork在执行中将拷贝当前进程（即父进程）的用户内存地址空间中的合法内容到新进程中（子进程），完成内存资源的复制。具体是通过copy_range函数（位于kern/mm/pmm.c中）实现的。
+创建子进程的函数 `do_fork` 在执行中将拷贝当前进程（即父进程）的用户内存地址空间中的合法内容到新进程中（子进程），完成内存资源的复制。具体是通过 `copy_range` 函数（位于 `kern/mm/pmm.c` 中）实现的。
 
-依照copy_mm的注释，调用路径为 do_fork --> copy_mm --> dup_mmap --> copy_range
+依照 `copy_mm` 的注释，调用路径为 `do_fork --> copy_mm --> dup_mmap --> copy_range`。
 
-do_fork函数通过调用copy_mm根据clone_flag复制或共享父进程内存信息，在copy_mm中打开互斥锁,避免多个进程同时访问内存，在dup_mmap中调用copy_range逐页复制父进程的物理内存到子进程。
+`do_fork` 函数通过调用 `copy_mm` 根据 `clone_flag` 复制或共享父进程内存信息，在 `copy_mm` 中打开互斥锁，避免多个进程同时访问内存，在 `dup_mmap` 中调用 `copy_range` 逐页复制父进程的物理内存到子进程。
 
-查看copy_range函数如下，我们要做的工作便是补充copy_range的实现，确保能够正确执行。
+查看 `copy_range` 函数如下，我们要做的工作便是补充 `copy_range` 的实现，确保能够正确执行。
 
 ```c
 /* copy_range - 将一个进程 A 的指定内存范围 (start, end) 内容复制到另一个进程 B 中
@@ -512,16 +515,19 @@ copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool share) {
              * (3) 将 src_kvaddr 内容复制到 dst_kvaddr，复制大小为 PGSIZE
              * (4) 调用 page_insert 建立目标页表项
              */
+            void * src_kvaddr = page2kva(page); 
+            void * dst_kvaddr = page2kva(npage); 
+            memcpy(dst_kvaddr, src_kvaddr, PGSIZE);
+            ret = page_insert(to, npage, start, perm);
             assert(ret == 0);
         }
         start += PGSIZE;
     } while (start != 0 && start < end);
     return 0;
 }
-
 ```
 
-查看copy_range其余部分的代码，源进程 A 中地址 start 对应的页表项对应的物理页是page，目标页面是npage，调用page2kva函数分别获得其对应的在内核地址空间中的虚拟地址，因为mymcpy这个函数执行的时候使用的时内核的地址空间，利用该函数复制PGSIZE大小，查看page_insert函数定义，依照定义建立页表映射，将物理页（npage）映射到目标进程（to）的虚拟地址 start 处，并设置页表项的权限标志 perm。依照实验给出的注释填写代码即可。
+查看 `copy_range` 其余部分的代码，源进程 A 中地址 `start` 对应的页表项对应的物理页是 `page`，目标页面是 `npage`，调用 `page2kva` 函数分别获得其对应的在内核地址空间中的虚拟地址，因为 `memcpy` 这个函数执行的时候使用的是内核的地址空间，利用该函数复制 `PGSIZE` 大小，查看 `page_insert` 函数定义，依照定义建立页表映射，将物理页（`npage`）映射到目标进程（`to`）的虚拟地址 `start` 处，并设置页表项的权限标志 `perm`。依照实验给出的注释填写代码即可。
 
 ```c
 void * src_kvaddr = page2kva(page); 
@@ -530,20 +536,20 @@ memcpy(dst_kvaddr, src_kvaddr, PGSIZE);
 ret = page_insert(to, npage, start, perm);
 ```
 
-创建后，效果如下
+创建后，效果如下：
 
 | 类型 | 地址空间 | 虚拟地址（start） | 物理页 | 权限 |
 | --- | --- | --- | --- | --- |
 | 源进程 A | `from` | `start` | `page` | perm |
 | 目标进程 B | `to` | `start` | `npage`（新分配） | 相同权限 |
 
-## 简要说明如何设计实现”Copy on Write 机制“
+### 简要说明如何设计实现 “Copy on Write 机制”
 
-Copy-on-write（简称COW）的基本概念是指如果有多个使用者对一个资源A（比如内存块）进行读操作，则每个使用者只需获得一个指向同一个资源A的指针，就可以该资源了。若某使用者需要对这个资源A进行写操作，系统会对该资源进行拷贝操作，从而使得该“写操作”使用者获得一个该资源A的“私有”拷贝—资源B，可对资源B进行写操作。该“写操作”使用者对资源B的改变对于其他的使用者而言是不可见的，因为其他使用者看到的还是资源A。
+Copy-on-write（简称 COW）的基本概念是指如果有多个使用者对一个资源 A（比如内存块）进行读操作，则每个使用者只需获得一个指向同一个资源 A 的指针，就可以该资源了。若某使用者需要对这个资源 A 进行写操作，系统会对该资源进行拷贝操作，从而使得该“写操作”使用者获得一个该资源 A 的私有拷贝——资源 B，可对资源 B 进行写操作。该“写操作”使用者对资源 B 的改变对于其他的使用者而言是不可见的，因为其他使用者看到的还是资源 A。
 
-在进程执行 fork 系统调用进行复制的时候，父进程不会简单地将整个内存中的内容复制给子进程，而是暂时共享相同的物理内存页；而当其中一个进程需要对内存进行修改的时候，再额外创建一个自己私有的物理内存页，将共享的内容复制过去，然后在自己的内存页中进行修改；
+在进程执行 `fork` 系统调用进行复制的时候，父进程不会简单地将整个内存中的内容复制给子进程，而是暂时共享相同的物理内存页；而当其中一个进程需要对内存进行修改的时候，再额外创建一个自己私有的物理内存页，将共享的内容复制过去，然后在自己的内存页中进行修改。
 
-do_fork 时：
+`do_fork` 时：
 
 - 共享父进程的物理页。
 - 将父进程和子进程的页表项都设置为只读，并标记 COW。
@@ -553,14 +559,14 @@ do_fork 时：
 写操作时（page fault）：
 
 1. 检查引发缺页的地址是否在用户空间，并且错误原因是写操作。
-2. 检查该地址对应的页表项是否存在，并且标记为COW。
+2. 检查该地址对应的页表项是否存在，并且标记为 COW。
 3. 如果满足条件，则分配新物理页，复制内容。
-4. 修改当前进程的页表项，指向新物理页，并设置权限（可写，清除COW标记）。
-5. 减少原始物理页的引用计数，如果引用计数变为0，则释放该物理页。
+4. 修改当前进程的页表项，指向新物理页，并设置权限（可写，清除 COW 标记）。
+5. 减少原始物理页的引用计数，如果引用计数变为 0，则释放该物理页。
 
-# 练习3: 阅读分析源代码，理解进程执行 fork/exec/wait/exit 的实现，以及系统调用的实现
+## 练习 3：阅读分析源代码，理解进程执行 fork/exec/wait/exit 的实现，以及系统调用的实现
 
-在proc.c文件中，介绍了有关 fork/exec/wait/exit 的系统调用及其作用：
+在 `proc.c` 文件中，介绍了有关 `fork/exec/wait/exit` 的系统调用及其作用：
 
 ```c
 SYS_exit        : process exit,                           -->do_exit
@@ -571,9 +577,9 @@ SYS_exec        : after fork, process execute a program   -->load a program and 
 
 其右侧给出了调用链。
 
-## fork
+### fork
 
-在syscall.c中找到了其系统调用的实现：
+在 `syscall.c` 中找到了其系统调用的实现：
 
 ```c
 static int
@@ -586,22 +592,22 @@ sys_fork(uint32_t arg[]) {
 
 `sys_fork` 是内核中处理 `fork()` 系统调用的函数，它从当前进程的 trapframe 中提取必要上下文信息，并调用 `do_fork` 来创建一个子进程，使其从同样的位置继续运行。
 
-其中do_fork函数已在lab4已经lab5的练习二中实现，代码也在相应练习中给出，大致完成的工作如下
+其中 `do_fork` 函数已在 lab4 以及 lab5 的练习二中实现，代码也在相应练习中给出，大致完成的工作如下：
 
-1. 分配并初始化进程控制块（ alloc_proc 函数）;
-2. 分配并初始化内核栈，为内核进程（线程）建立栈空间（ setup_stack 函数）;
-3. 根据 clone_flag 标志复制或共享进程内存管理结构（ copy_mm 函数）;
-4. 设置进程在内核（将来也包括用户态）正常运行和调度所需的中断帧和执行上下文 （ copy_thread 函数）;
-5. 为进程分配一个 PID（ get_pid() 函数）;
-6. 把设置好的进程控制块放入 hash_list 和 proc_list 两个全局进程链表中;
-7. 自此，进程已经准备好执行了，把进程状态设置为“就绪”态;
+1. 分配并初始化进程控制块（`alloc_proc` 函数）；
+2. 分配并初始化内核栈，为内核进程（线程）建立栈空间（`setup_stack` 函数）；
+3. 根据 `clone_flag` 标志复制或共享进程内存管理结构（`copy_mm` 函数）；
+4. 设置进程在内核（将来也包括用户态）正常运行和调度所需的中断帧和执行上下文（`copy_thread` 函数）；
+5. 为进程分配一个 PID（`get_pid()` 函数）；
+6. 把设置好的进程控制块放入 `hash_list` 和 `proc_list` 两个全局进程链表中；
+7. 自此，进程已经准备好执行了，把进程状态设置为「就绪」态；
 8. 设置返回码为子进程的 PID 号。
 
-而 wakeup_proc 函数主要是将进程的状态设置为等待，即 proc->wait_state = 0。
+而 `wakeup_proc` 函数主要是将进程的状态设置为等待，即 `proc->wait_state = 0`。
 
-## exec
+### exec
 
-在syscall.c中找到了其系统调用的实现：
+在 `syscall.c` 中找到了其系统调用的实现：
 
 ```c
 static int
@@ -615,7 +621,8 @@ sys_exec(uint32_t arg[]) {
 ```
 
 `sys_exec` 是内核中处理 `exec` 系统调用的接口函数，它接收用户传入的新程序名称和二进制内容，并调用 `do_execve` 来加载并执行新程序，替换当前进程的执行映像。
-`do_execve()`具体实现如下：
+
+`do_execve()` 具体实现如下：
 
 ```c
 int
@@ -675,9 +682,9 @@ execve_exit:
 4. 设置新进程名；
 5. 如果加载失败则终止当前进程。
 
-## wait
+### wait
 
-在syscall.c中找到了其系统调用的实现：
+在 `syscall.c` 中找到了其系统调用的实现：
 
 ```c
 static int
@@ -689,7 +696,8 @@ sys_wait(uint32_t arg[]) {
 ```
 
 `sys_wait` 是用户态进程调用 `wait()` 或 `waitpid()` 时进入内核的接口，它接收子进程 pid 和退出码存储位置，并调用 `do_wait` 实现等待子进程退出、回收资源并返回退出信息的功能。
-`do_wait()`具体实现如下：
+
+`do_wait()` 具体实现如下：
 
 ```c
 int
@@ -774,14 +782,13 @@ found:
 
     return 0;          // 成功等待并回收子进程
 }
-
 ```
 
 `do_wait` 是内核实现的等待子进程退出的函数，它支持等待指定或任意子进程，并在找到已退出的子进程后回收其资源并返回退出码；如果没有找到，就让当前进程进入休眠，直到子进程退出或进程被杀死。
 
-## exit
+### exit
 
-在syscall.c中找到了其系统调用的实现：
+在 `syscall.c` 中找到了其系统调用的实现：
 
 ```c
 static int
@@ -793,7 +800,7 @@ sys_exit(uint32_t arg[]) {
 
 `sys_exit` 是用户态进程调用 `exit()` 时进入内核的系统调用接口，它接收退出码并调用 `do_exit` 来终止进程并进行资源清理。
 
-接下来我们来看看`do_exit()` 的具体实现：
+接下来我们来看看 `do_exit()` 的具体实现：
 
 ```c
 int
@@ -877,13 +884,13 @@ do_exit(int error_code) {
 }
 ```
 
-do_exit函数完成的任务是：安全终止当前用户进程，在确保关键内核进程（如 `idleproc` 和 `initproc`）不会被错误退出的前提下，释放当前进程的内存资源，设置其状态为僵尸进程，保存退出码，重新将其所有子进程托付给 `initproc`，并在需要时唤醒其父进程或 `initproc`，最后交由调度器切换运行其它进程，从而完成一次完整的进程退出流程。
+`do_exit` 函数完成的任务是：安全终止当前用户进程，在确保关键内核进程（如 `idleproc` 和 `initproc`）不会被错误退出的前提下，释放当前进程的内存资源，设置其状态为僵尸进程，保存退出码，重新将其所有子进程托付给 `initproc`，并在需要时唤醒其父进程或 `initproc`，最后交由调度器切换运行其它进程，从而完成一次完整的进程退出流程。
 
 进程通过上述函数，可以进行状态转换：
 
 ![image.png](images/image%2013.png)
 
-# 实现效果
+## 实验结果
 
 ![image.png](images/image%2014.png)
 

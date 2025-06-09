@@ -533,11 +533,11 @@ ucore 已经为实现软硬链接预留了接口：
 
 链接的创建与删除：
 
-- 创建硬链接时，仍然为new_path建立一个sfs_disk_entry结构，但该结构的内部ino成员指向old_path的磁盘索引结点，并使该磁盘索引节点的nlinks引用计数成员加一即可。
-删除硬链接时，令对应磁盘结点sfs_disk_inode中的nlinks减一，同时删除硬链接的sfs_disk_entry结构即可。
+- 创建硬链接时，仍然为 `new_path` 建立一个 `sfs_disk_entry` 结构，但该结构的内部 `ino` 成员指向 `old_path` 的磁盘索引结点，并使该磁盘索引节点的 `nlinks` 引用计数成员加一即可。
+删除硬链接时，令对应磁盘结点 `sfs_disk_inode` 中的 `nlinks` 减一，同时删除硬链接的 `sfs_disk_entry` 结构即可。
 软链接的实现
 
-- 与创建硬链接不同，创建软链接时要多建立一个sfs_disk_inode结构。之后，将old_path写入该文件中，并标注sfs_disk_inode的type为SFS_TYPE_LINK即可。删除软链接与删除文件的操作没有区别，直接将对应的sfs_disk_entry和sfs_disk_inode结构删除即可。
+- 与创建硬链接不同，创建软链接时要多建立一个 `sfs_disk_inode` 结构。之后，将 `old_path` 写入该文件中，并标注 `sfs_disk_inode` 的 `type` 为 `SFS_TYPE_LINK` 即可。删除软链接与删除文件的操作没有区别，直接将对应的 `sfs_disk_entry` 和 `sfs_disk_inode` 结构删除即可。
 
 读取链接：
 
